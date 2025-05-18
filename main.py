@@ -168,7 +168,6 @@ def main() -> None:
     # Обработчик команды /start
     dispatcher.add_handler(CommandHandler("start", start))
 
-    [... остальной код остается без изменений ...]
 
     # Запуск бота
     updater.start_polling()
