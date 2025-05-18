@@ -28,7 +28,7 @@ scheduler = BackgroundScheduler()
 scheduler.start()
 
 # ВАЖНО: ЗАМЕНИТЕ ЭТОТ ТОКЕН НА ВАШ РЕАЛЬНЫЙ ТОКЕН БОТА
-TELEGRAM_BOT_TOKEN = "ВАШ_TELEGRAM_BOT_TOKEN_ЗДЕСЬ"
+TELEGRAM_BOT_TOKEN = "7454553310:AAF8d6cjQLbTstEQ3GR-IEMcYvlyueCJ56A"
 
 def start(update: Update, context: CallbackContext) -> None:
     """Отправляет приветственное сообщение при команде /start"""
