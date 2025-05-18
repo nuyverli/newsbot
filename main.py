@@ -11,53 +11,58 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# Включим логирование
+# Настройка логирования
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 # Состояния для ConversationHandler
 EVENT, TIME = range(2)
 
-# Словарь для хранения напоминаний
+# Глобальный словарь для хранения напоминаний
 reminders = {}
 
 # Инициализация планировщика
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# ВАЖНО: ЗАМЕНИТЕ ЭТОТ ТОКЕН НА ВАШ РЕАЛЬНЫЙ ТОКЕН БОТА
+# Токен бота (замените на ваш)
 TELEGRAM_BOT_TOKEN = "7454553310:AAF8d6cjQLbTstEQ3GR-IEMcYvlyueCJ56A"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Отправляет приветственное сообщение при команде /start"""
+    """Приветственное сообщение"""
     user = update.effective_user
     await update.message.reply_text(
         f"Привет, {user.first_name}! Я бот-напоминалка.\n"
-        "Я могу напомнить тебе о важных событиях в указанное время.\n\n"
-        "Чтобы создать напоминание, используй команду /remind\n"
-        "Чтобы посмотреть свои напоминания - /list\n"
-        "Чтобы удалить напоминание - /cancel"
+        "Я могу напомнить тебе о важных событиях.\n\n"
+        "Команды:\n"
+        "/remind - создать напоминание\n"
+        "/list - показать напоминания\n"
+        "/cancel <номер> - удалить напоминание"
     )
 
 async def remind(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Начинает диалог создания напоминания"""
+    """Начинает процесс создания напоминания"""
     await update.message.reply_text(
-        "О чём тебе напомнить? (например: 'Принять таблетки', 'Позвонить маме')"
+        "📝 О чём тебе напомнить?\n"
+        "Например: Принять таблетки, Позвонить маме, Сделать зарядку"
     )
     return EVENT
 
 async def event(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Сохраняет событие и запрашивает время"""
+    """Получает текст напоминания"""
+    # Сохраняем текст как есть, без обработки кавычек
     context.user_data['event'] = update.message.text
     await update.message.reply_text(
-        "Введите время напоминания в формате ЧЧ:ММ (например, 14:30)"
+        "⏰ Введите время в формате ЧЧ:ММ\n"
+        "Например: 14:30 или 09:15"
     )
     return TIME
 
 async def time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Сохраняет время и создаёт напоминание"""
+    """Получает время и сохраняет напоминание"""
     user_id = update.message.from_user.id
     event_text = context.user_data['event']
     time_text = update.message.text
@@ -67,34 +72,40 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         reminder_time = datetime.strptime(time_text, "%H:%M").time()
         now = datetime.now().time()
         
-        # Проверяем, что время ещё не прошло сегодня
+        # Проверяем что время в будущем
         if reminder_time <= now:
             await update.message.reply_text(
-                "Это время уже прошло сегодня. Пожалуйста, укажите время в будущем."
+                "⏳ Это время уже прошло сегодня. Укажите время в будущем."
             )
             return TIME
         
-        # Сохраняем напоминание
+        # Инициализируем список напоминаний для пользователя, если его нет
         if user_id not in reminders:
             reminders[user_id] = []
         
+        # Создаем ID для нового напоминания
         reminder_id = len(reminders[user_id]) + 1
+        
+        # Сохраняем напоминание
         reminders[user_id].append({
             'id': reminder_id,
             'event': event_text,
-            'time': time_text
+            'time': time_text,
+            'datetime': datetime.combine(datetime.now().date(), reminder_time)
         })
         
         # Планируем напоминание
         await schedule_reminder(user_id, reminder_id, event_text, time_text, context)
         
         await update.message.reply_text(
-            f"Отлично! Я напомню тебе '{event_text}' в {time_text}"
+            f"✅ Запомнил! Напомню о:\n"
+            f"'{event_text}'\n"
+            f"в {time_text}"
         )
         
     except ValueError:
         await update.message.reply_text(
-            "Неверный формат времени. Пожалуйста, введите время в формате ЧЧ:ММ (например, 14:30)"
+            "❌ Неверный формат времени. Используйте ЧЧ:ММ (например, 14:30)"
         )
         return TIME
     
@@ -103,63 +114,81 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def schedule_reminder(user_id: int, reminder_id: int, event_text: str, time_text: str, context: ContextTypes.DEFAULT_TYPE):
     """Планирует отправку напоминания"""
     async def send_reminder():
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"⏰ Напоминаю: {event_text}"
-        )
-        # Удаляем напоминание после отправки
-        if user_id in reminders:
-            reminders[user_id] = [r for r in reminders[user_id] if r['id'] != reminder_id]
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"🔔 Напоминание!\n{event_text}"
+            )
+            # Удаляем из списка после отправки
+            if user_id in reminders:
+                reminders[user_id] = [r for r in reminders[user_id] if r['id'] != reminder_id]
+        except Exception as e:
+            logger.error(f"Ошибка отправки напоминания: {e}")
     
-    # В реальном приложении нужно использовать точное время из time_text
-    scheduler.add_job(
-        send_reminder,
-        'date',
-        run_date=datetime.now() + timedelta(minutes=1)
-    )
+    # Получаем время из сохраненного напоминания
+    reminder = next((r for r in reminders[user_id] if r['id'] == reminder_id), None)
+    if reminder:
+        run_time = reminder['datetime']
+        if run_time < datetime.now():
+            run_time += timedelta(days=1)  # Переносим на завтра, если время прошло
+            
+        scheduler.add_job(
+            send_reminder,
+            'date',
+            run_date=run_time
+        )
 
 async def list_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Показывает список активных напоминаний"""
     user_id = update.message.from_user.id
     if user_id in reminders and reminders[user_id]:
-        message = "Ваши напоминания:\n\n"
-        for reminder in reminders[user_id]:
-            message += f"{reminder['id']}. {reminder['event']} в {reminder['time']}\n"
+        message = "📋 Ваши напоминания:\n\n"
+        for reminder in sorted(reminders[user_id], key=lambda x: x['time']):
+            message += f"{reminder['id']}. ⏰ {reminder['time']} - {reminder['event']}\n"
         await update.message.reply_text(message)
     else:
-        await update.message.reply_text("У вас нет активных напоминаний.")
+        await update.message.reply_text("📭 У вас нет активных напоминаний.")
 
 async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Удаляет напоминание"""
+    """Удаляет указанное напоминание"""
     user_id = update.message.from_user.id
     if user_id not in reminders or not reminders[user_id]:
-        await update.message.reply_text("У вас нет активных напоминаний.")
+        await update.message.reply_text("📭 У вас нет активных напоминаний для удаления.")
         return
     
     try:
-        # Пытаемся получить ID напоминания из аргументов команды
+        if not context.args:
+            raise ValueError
+        
         reminder_id = int(context.args[0])
+        # Проверяем существование напоминания
+        if not any(r['id'] == reminder_id for r in reminders[user_id]):
+            await update.message.reply_text(f"❌ Напоминание с ID {reminder_id} не найдено.")
+            return
+            
+        # Удаляем напоминание
         reminders[user_id] = [r for r in reminders[user_id] if r['id'] != reminder_id]
-        await update.message.reply_text(f"Напоминание {reminder_id} удалено.")
+        await update.message.reply_text(f"✅ Напоминание {reminder_id} удалено.")
+        
     except (IndexError, ValueError):
-        await update.message.reply_text("Использование: /cancel <ID напоминания>")
+        await update.message.reply_text(
+            "❌ Используйте: /cancel <номер>\n"
+            "Например: /cancel 1\n"
+            "Посмотреть номера: /list"
+        )
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отменяет диалог создания напоминания"""
-    await update.message.reply_text("Создание напоминания отменено.")
+    await update.message.reply_text("❌ Создание напоминания отменено.")
     return ConversationHandler.END
 
 def main() -> None:
     """Запуск бота"""
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Обработчик команды /start
+    # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", start))
-
-    # Обработчик команды /list
     application.add_handler(CommandHandler("list", list_reminders))
-
-    # Обработчик команды /cancel
     application.add_handler(CommandHandler("cancel", cancel_reminder))
 
     # Обработчик диалога создания напоминания
@@ -171,10 +200,9 @@ def main() -> None:
         },
         fallbacks=[CommandHandler('cancel', cancel_conversation)],
     )
-
     application.add_handler(conv_handler)
 
-    # Запуск бота
+    # Запускаем бота
     application.run_polling()
 
 if __name__ == '__main__':
