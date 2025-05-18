@@ -2,12 +2,11 @@ import logging
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import (
-    Updater,
+    ApplicationBuilder,
     CommandHandler,
     MessageHandler,
     filters,
     ConversationHandler,
-    CallbackContext,
     ContextTypes,
 )
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -45,8 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def remind(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает диалог создания напоминания"""
     await update.message.reply_text(
-        "О чём тебе напомнить? (например: 'Принять таблетки', 'Позвонить маме')",
-        reply_markup=ReplyKeyboardRemove(),
+        "О чём тебе напомнить? (например: 'Принять таблетки', 'Позвонить маме')"
     )
     return EVENT
 
@@ -88,7 +86,7 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         })
         
         # Планируем напоминание
-        schedule_reminder(user_id, reminder_id, event_text, time_text, context)
+        await schedule_reminder(user_id, reminder_id, event_text, time_text, context)
         
         await update.message.reply_text(
             f"Отлично! Я напомню тебе '{event_text}' в {time_text}"
@@ -102,7 +100,7 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     return ConversationHandler.END
 
-def schedule_reminder(user_id: int, reminder_id: int, event_text: str, time_text: str, context: ContextTypes.DEFAULT_TYPE):
+async def schedule_reminder(user_id: int, reminder_id: int, event_text: str, time_text: str, context: ContextTypes.DEFAULT_TYPE):
     """Планирует отправку напоминания"""
     async def send_reminder():
         await context.bot.send_message(
@@ -148,10 +146,7 @@ async def cancel_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отменяет диалог создания напоминания"""
-    await update.message.reply_text(
-        "Создание напоминания отменено.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await update.message.reply_text("Создание напоминания отменено.")
     return ConversationHandler.END
 
 def main() -> None:
